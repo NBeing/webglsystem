@@ -17,6 +17,7 @@ uniform vec2 u_scale;
 out vec2 v_texCoord;
 out vec2 v_position;
 out float color;
+
 // out vec2 gl_FragCoord;
 
 // all shaders have a main function

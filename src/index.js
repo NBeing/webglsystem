@@ -13,17 +13,159 @@ const fragmentShaderText = require("./shaders/fragment.glsl").default
 const vertexShaderText = require("./shaders/vertex.glsl").default
 const colorFragmentShaderText = require("./shaders/color_fragment.glsl").default
 const colorVertexShaderText = require("./shaders/color_vertex.glsl").default
+const fragmentDitherText = require("./shaders/fragment_dither.glsl").default
+const fragmentDither2Text = require("./shaders/fragment_dither2.glsl").default
+const threedfragmentShaderText = require("./shaders/3d_fragment.glsl").default
+const threedvertexShaderText = require("./shaders/3d_vertex.glsl").default
+
 // console.log("Sp", spriteImg)
 let gl = null
 let isPaused = false
 let playing = true
 let _APP
 let data = []
-let playbackRate = 0.2
+let playbackRate = 1
 
 const degreesToRadians = (degrees) => {
   return degrees * ((Math.PI) / 180)
 }
+
+const m4 = {
+  translation: function(tx, ty, tz) {
+    return [
+       1,  0,  0,  0,
+       0,  1,  0,  0,
+       0,  0,  1,  0,
+       tx, ty, tz, 1,
+    ];
+  },
+ 
+  xRotation: function(angleInRadians) {
+    var c = Math.cos(angleInRadians);
+    var s = Math.sin(angleInRadians);
+ 
+    return [
+      1, 0, 0, 0,
+      0, c, s, 0,
+      0, -s, c, 0,
+      0, 0, 0, 1,
+    ];
+  },
+ 
+  yRotation: function(angleInRadians) {
+    var c = Math.cos(angleInRadians);
+    var s = Math.sin(angleInRadians);
+ 
+    return [
+      c, 0, -s, 0,
+      0, 1, 0, 0,
+      s, 0, c, 0,
+      0, 0, 0, 1,
+    ];
+  },
+ 
+  zRotation: function(angleInRadians) {
+    var c = Math.cos(angleInRadians);
+    var s = Math.sin(angleInRadians);
+ 
+    return [
+       c, s, 0, 0,
+      -s, c, 0, 0,
+       0, 0, 1, 0,
+       0, 0, 0, 1,
+    ];
+  },
+ 
+  scaling: function(sx, sy, sz) {
+    return [
+      sx, 0,  0,  0,
+      0, sy,  0,  0,
+      0,  0, sz,  0,
+      0,  0,  0,  1,
+    ];
+  },
+  translate: function(m, tx, ty, tz) {
+    return m4.multiply(m, m4.translation(tx, ty, tz));
+  },
+ 
+  xRotate: function(m, angleInRadians) {
+    return m4.multiply(m, m4.xRotation(angleInRadians));
+  },
+ 
+  yRotate: function(m, angleInRadians) {
+    return m4.multiply(m, m4.yRotation(angleInRadians));
+  },
+ 
+  zRotate: function(m, angleInRadians) {
+    return m4.multiply(m, m4.zRotation(angleInRadians));
+  },
+ 
+  scale: function(m, sx, sy, sz) {
+    return m4.multiply(m, m4.scaling(sx, sy, sz));
+  },
+  multiply: function(a, b) {
+    var b00 = b[0 * 4 + 0];
+    var b01 = b[0 * 4 + 1];
+    var b02 = b[0 * 4 + 2];
+    var b03 = b[0 * 4 + 3];
+    var b10 = b[1 * 4 + 0];
+    var b11 = b[1 * 4 + 1];
+    var b12 = b[1 * 4 + 2];
+    var b13 = b[1 * 4 + 3];
+    var b20 = b[2 * 4 + 0];
+    var b21 = b[2 * 4 + 1];
+    var b22 = b[2 * 4 + 2];
+    var b23 = b[2 * 4 + 3];
+    var b30 = b[3 * 4 + 0];
+    var b31 = b[3 * 4 + 1];
+    var b32 = b[3 * 4 + 2];
+    var b33 = b[3 * 4 + 3];
+    var a00 = a[0 * 4 + 0];
+    var a01 = a[0 * 4 + 1];
+    var a02 = a[0 * 4 + 2];
+    var a03 = a[0 * 4 + 3];
+    var a10 = a[1 * 4 + 0];
+    var a11 = a[1 * 4 + 1];
+    var a12 = a[1 * 4 + 2];
+    var a13 = a[1 * 4 + 3];
+    var a20 = a[2 * 4 + 0];
+    var a21 = a[2 * 4 + 1];
+    var a22 = a[2 * 4 + 2];
+    var a23 = a[2 * 4 + 3];
+    var a30 = a[3 * 4 + 0];
+    var a31 = a[3 * 4 + 1];
+    var a32 = a[3 * 4 + 2];
+    var a33 = a[3 * 4 + 3];
+ 
+    return [
+      b00 * a00 + b01 * a10 + b02 * a20 + b03 * a30,
+      b00 * a01 + b01 * a11 + b02 * a21 + b03 * a31,
+      b00 * a02 + b01 * a12 + b02 * a22 + b03 * a32,
+      b00 * a03 + b01 * a13 + b02 * a23 + b03 * a33,
+      b10 * a00 + b11 * a10 + b12 * a20 + b13 * a30,
+      b10 * a01 + b11 * a11 + b12 * a21 + b13 * a31,
+      b10 * a02 + b11 * a12 + b12 * a22 + b13 * a32,
+      b10 * a03 + b11 * a13 + b12 * a23 + b13 * a33,
+      b20 * a00 + b21 * a10 + b22 * a20 + b23 * a30,
+      b20 * a01 + b21 * a11 + b22 * a21 + b23 * a31,
+      b20 * a02 + b21 * a12 + b22 * a22 + b23 * a32,
+      b20 * a03 + b21 * a13 + b22 * a23 + b23 * a33,
+      b30 * a00 + b31 * a10 + b32 * a20 + b33 * a30,
+      b30 * a01 + b31 * a11 + b32 * a21 + b33 * a31,
+      b30 * a02 + b31 * a12 + b32 * a22 + b33 * a32,
+      b30 * a03 + b31 * a13 + b32 * a23 + b33 * a33,
+    ];
+  },
+  projection: function(width, height, depth) {
+    // Note: This matrix flips the Y axis so 0 is at the top.
+    return [
+       2 / width, 0, 0, 0,
+       0, -2 / height, 0, 0,
+       0, 0, 2 / depth, 0,
+      -1, 1, 0, 1,
+    ];
+  },
+};
 
 const lsystems = {
   algae2 : {
@@ -343,6 +485,7 @@ function updateTexture(gl, texture, video) {
     video,
   );
 }
+
 const meanings = {
   // move in
   "F": (config) => {
@@ -403,12 +546,12 @@ const meanings = {
   },
   "+": (config) => {
     // angle is in radians, and we want to change the angle in the direction
-    config.current_angle = config.current_angle + config.theta
+    config.current_angle = config.current_angle + config.theta// + Math.sin(Math.random() * (config.time * 0.0025) ) * 0.1021
     return config
   },
   "-": (config) => {
     // angle is in radians, and we want to change the angle in the direction
-    config.current_angle = config.current_angle - config.theta
+    config.current_angle = config.current_angle - config.theta// - Math.sin(Math.random() * config.time * 0.0025) * 0.0121
     return config
   },
   "|": (config) => {
@@ -459,7 +602,8 @@ const drawTheThingIterative = (config) => {
     current_x, //starting_point_x,
     current_y, //starting_point_y
     current_angle,
-    stack
+    stack,
+    time,
   } = config
 
   const rewrite = (rules, axiom) => {
@@ -583,12 +727,12 @@ class Renderer {
     let y2 = y + height; // canvas height
     return [
       x1, y1, // 0,0
-      x2, y1, // width, 0
       x1, y2, // 0, height    
-      x2, y2 // width height
+      x2, y1, // width, 0
+      x2, y2, // width height
     ]
   }
-  generateLSystem(width, height){
+  generateLSystem(width, height, two){
     let current_lsystem = lsystems.saupe
     let defaultLength = 25
     this.defaultLineWidth = current_lsystem.lineWidth || 10 
@@ -609,6 +753,7 @@ class Renderer {
         current_y, //starting_point_y.
         current_angle: current_lsystem.current_angle || defaultCurrent_angle,
         stack: [],
+        time: two,
       })
       this.frameCount = 0
       this.last_id = 0
@@ -634,8 +779,23 @@ class Renderer {
       }
       return positions
     } catch(e){
-      console.log("E",e )
+      console.log("E", e )
     }
+  }
+  generateThreeDeeTexCoords = (positions) => {
+    let result = []
+    for(let i = 0; i < positions.flat().length; i+=9){
+      result.push(
+        0,  0, 
+        0,  1,
+        1,  0,
+        
+        0, 1,
+        1, 1, 
+        1, 0,
+      )
+    }
+    return result.flat()
   }
   generateTexCoords = (positions) => {
     let result = []
@@ -661,7 +821,7 @@ class Renderer {
     let width = window.innerWidth
     let height = window.innerHeight
   
-    this.generateLSystem(width,height)    
+    this.generateLSystem(width,height, two)    
   
     let __positions = this.lastPositions || []
     
@@ -777,7 +937,7 @@ class Renderer {
     }
     let width = window.innerWidth
     let height = window.innerHeight
-
+    // playbackRate = Math.sin(0.01 + Math.round(two * 2.0)) * 1.5;
 
     // first create a texture to render to 
     // create to render to
@@ -823,7 +983,7 @@ class Renderer {
     );
     
     const drawSquare = () => {
-      this.programInfo = twgl.createProgramInfo(gl, [vertexShaderText, fragmentShaderText])
+      this.programInfo = twgl.createProgramInfo(gl, [vertexShaderText, fragmentDither2Text])
 
       gl.useProgram(this.programInfo.program)
 
@@ -905,47 +1065,7 @@ class Renderer {
       */
       
 
-      // function drawCube(aspect) {
-      //   // Tell it to use our program (pair of shaders)
-      //   gl.useProgram(program);
-       
-      //   // Bind the attribute/buffer set we want.
-      //   gl.bindVertexArray(vao);
-       
-      //   // Compute the projection matrix
-      //   // var aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
-      //   var projectionMatrix =
-      //       m4.perspective(fieldOfViewRadians, aspect, 1, 2000);
-       
-      //   var cameraPosition = [0, 0, 2];
-      //   var up = [0, 1, 0];
-      //   var target = [0, 0, 0];
-       
-      //   // Compute the camera's matrix using look at.
-      //   var cameraMatrix = m4.lookAt(cameraPosition, target, up);
-       
-      //   // Make a view matrix from the camera matrix.
-      //   var viewMatrix = m4.inverse(cameraMatrix);
-       
-      //   var viewProjectionMatrix = m4.multiply(projectionMatrix, viewMatrix);
-       
-      //   var matrix = m4.xRotate(viewProjectionMatrix, modelXRotationRadians);
-      //   matrix = m4.yRotate(matrix, modelYRotationRadians);
-       
-      //   // Set the matrix.
-      //   gl.uniformMatrix4fv(matrixLocation, false, matrix);
-       
-      //   // Tell the shader to use texture unit 0 for u_texture
-      //   gl.uniform1i(textureLocation, 0);
-       
-      //   // Draw the geometry.
-      //   var primitiveType = gl.TRIANGLES;
-      //   var offset = 0;
-      //   var count = 6 * 6;
-      //   gl.drawArrays(primitiveType, offset, count);
-      // }
-
-      const kernelToUse = kernels.edgeDetect3
+      const kernelToUse = kernels.emboss
 
       const uniforms = {
         u_resolution: vec2.fromValues(window.innerWidth, window.innerHeight),
@@ -956,8 +1076,20 @@ class Renderer {
         texture2: this.textures.flowas,
         u_matrix,
         u_kernelWeight: this.computeKernelWeight(kernelToUse),
-        "u_kernel": kernelToUse
-    
+        "u_kernel": kernelToUse,
+        u_time: two,
+        palette: [
+          235/360,1,0.5,
+          100/360,1,0.5,
+          300/360,1,0.5,
+           40/360,1,0.5,
+          150/360,1,0.5,
+          225/360,1,0.5,
+           10/360,1,0.5,
+          200/360,1,0.5,
+        ],
+        paletteSize: 8,
+
       }
     
       twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo)
@@ -1011,7 +1143,7 @@ class Renderer {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
       // render the cube with the texture we just rendered to
-      gl.bindTexture(gl.TEXTURE_2D, this.textures.flowas);
+      gl.bindTexture(gl.TEXTURE_2D, this.videoTex);
 
       // Tell WebGL how to convert from clip space to pixels
       gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
@@ -1025,12 +1157,465 @@ class Renderer {
       const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
       drawSquare(aspect);
     }
-
     // drawSquare()
   }
-  render(one, two) {
-    // this.renderLSystem(one,two)
-    this.renderMultipassTest()
+  threedeerender(timeDiff,timeElapsed){
+    if (copyVideo) {
+      updateTexture(gl, this.videoTex, this.video);
+    }
+    gl.enable(gl.CULL_FACE);
+    gl.enable(gl.DEPTH_TEST);
+
+    {
+      // render to the canvas
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+      // render the cube with the texture we just rendered to
+      gl.bindTexture(gl.TEXTURE_2D, this.videoTex);
+
+      // Tell WebGL how to convert from clip space to pixels
+      gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+      // gl.viewport(0, 0, targetTextureWidth, targetTextureHeight);
+
+      // Clear the canvas AND the depth buffer.
+      gl.clearColor(1, 1, 1, 1);   // clear to white
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+
+    }
+      // Fill the current ARRAY_BUFFER buffer
+  // with the values that define a letter 'F'.
+
+    let width = window.innerWidth
+    let height = window.innerHeight
+    // playbackRate = Math.sin(0.01 + Math.round(two * 2.0)) * 1.5;
+
+    // first create a texture to render to 
+    // create to render to
+    const targetTextureWidth = 256;
+    const targetTextureHeight = 256;
+    const targetTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, targetTexture);
+    {
+      // define size and format of level 0
+      const level = 0;
+      const internalFormat = gl.RGBA;
+      const border = 0;
+      const format = gl.RGBA;
+      const type = gl.UNSIGNED_BYTE;
+      const data = null;
+      gl.texImage2D(gl.TEXTURE_2D, level, internalFormat,
+                    targetTextureWidth, targetTextureHeight, border,
+                    format, type, data);
+      
+      // set the filtering so we don't need mips
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    }
+    // Create and bind the framebuffer
+    // a framebuffer is just a collection of attachments
+    // not 100% on this but i think we can think of it like,
+    // this is an instance of a group of webgl settings / setups
+    // like things that are bound, textures, etc
+    const fb = gl.createFramebuffer();
+    // bind i.e. make this one the active frame buffer
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      
+    // attach the texture as the first color attachment
+    // recall we just bound the frame buffer we're interested in above as the active one
+    const attachmentPoint = gl.COLOR_ATTACHMENT0;
+    // attach a texture to a frame buffer, which we created above
+    // With our framebuffer bound, anytime we call 
+    // e.g. gl.clear, gl.drawArrays, or gl.drawElements
+    // WebGL would render to our texture instead of the canvas.
+    gl.framebufferTexture2D(
+        gl.FRAMEBUFFER, attachmentPoint, gl.TEXTURE_2D, targetTexture, 0//level
+    );
+    
+    const drawSquare = () => {
+      this.programInfo = twgl.createProgramInfo(gl, [threedvertexShaderText,threedfragmentShaderText])
+
+      gl.useProgram(this.programInfo.program)
+
+      let __positions = []
+      __positions.push([
+          // left column front
+            0,   0,  0,
+            0, 150,  0,
+           30,   0,  0,
+
+            0, 150,  0,
+            30, 150,  0,
+           30,   0,  0,
+
+          // top rung front
+           30,   0,  0,
+           30,  30,  0,
+           100,   0,  0,
+
+           30,  30,  0,
+           100,  30,  0,
+           100,   0,  0,
+
+          // middle rung front
+           30,  60,  0,
+           30,  90,  0,
+           67,  60,  0,
+           
+           30,  90,  0,
+           67,  90,  0,
+           67,  60,  0,
+
+          // left column back
+            0,   0,  30,
+            30,   0,  30,
+            0, 150,  30,
+           
+            0, 150,  30,
+            30,   0,  30,
+            30, 150,  30,
+
+          // top rung back
+           30,   0,  30,
+           100,   0,  30,
+           30,  30,  30,
+           
+           30,  30,  30,
+           100,   0,  30,
+           100,  30,  30,
+
+          // middle rung back
+           30,  60,  30,
+           67,  60,  30,
+           30,  90,  30,
+           
+           30,  90,  30,
+           67,  60,  30,
+           67,  90,  30,
+
+          // top
+            0,   0,   0,
+          100,   0,   0,
+          100,   0,  30,
+
+            0,   0,   0,
+          100,   0,  30,
+            0,   0,  30,
+
+          // top rung right
+          100,   0,   0,
+          100,  30,   0,
+          100,  30,  30,
+          
+          100,   0,   0,
+          100,  30,  30,
+          100,   0,  30,
+
+          // under top rung
+          30,   30,   0,
+          30,   30,  30,
+          100,  30,  30,
+          
+          30,   30,   0,
+          100,  30,  30,
+          100,  30,   0,
+
+          // between top rung and middle
+          30,   30,   0,
+          30,   60,  30,
+          30,   30,  30,
+          
+          30,   30,   0,
+          30,   60,   0,
+          30,   60,  30,
+
+          // top of middle rung
+          30,   60,   0,
+          67,   60,  30,
+          30,   60,  30,
+          
+          30,   60,   0,
+          67,   60,   0,
+          67,   60,  30,
+
+          // right of middle rung
+          67,   60,   0,
+          67,   90,  30,
+          67,   60,  30,
+          
+          67,   60,   0,
+          67,   90,   0,
+          67,   90,  30,
+
+          // bottom of middle rung.
+          30,   90,   0,
+          30,   90,  30,
+          67,   90,  30,
+          
+          30,   90,   0,
+          67,   90,  30,
+          67,   90,   0,
+
+          // right of bottom
+          30,   90,   0,
+          30,  150,  30,
+          30,   90,  30,
+          
+          30,   90,   0,
+          30,  150,   0,
+          30,  150,  30,
+
+          // bottom
+          0,   150,   0,
+          0,   150,  30,
+          30,  150,  30,
+          
+          0,   150,   0,
+          30,  150,  30,
+          30,  150,   0,
+
+          // left side
+          0,   0,   0,
+          0,   0,  30,
+          0, 150,  30,
+          
+          0,   0,   0,
+          0, 150,  30,
+          0, 150,   0,
+      ])
+      let colors = [
+        // left column front
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+
+        // top rung front
+        255,0,0,
+        255,0,0,
+        255,0,0,
+        255,0,0,
+        255,0,0,
+        255,0,0,
+        // middle rung front
+        0,255,0,
+        0,255,0,
+        0,255,0,
+        0,255,0,
+        0,255,0,
+        0,255,0,
+
+        // left column back
+        0,0,255,
+        0,0,255,
+        0,0,255,
+        0,0,255,
+        0,0,255,
+        0,0,255,
+        // top rung back
+        127,0,127,
+        127,0,127,
+        127,0,127,
+        127,0,127,
+        127,0,127,
+        127,0,127,
+        // middle rung back
+        255,0,0,
+        255,0,0,
+        255,0,0,
+        255,0,0,
+        255,0,0,
+        255,0,0,
+
+        // top
+        0, 255,255,
+        0, 255,255,
+        0, 255,255,
+        0, 255,255,
+        0, 255,255,
+        0, 255,255,
+        
+        // top rung right
+        255,0,255,
+        255,0,255,
+        255,0,255,
+        255,0,255,
+        255,0,255,
+        255,0,255,
+
+        // under top rung
+        127,0,127,
+        127,0,127,
+        127,0,127,
+        127,0,127,
+        127,0,127,
+        127,0,127,
+
+        // between top rung and middle
+        0,127,0,
+        0,127,0,
+        0,127,0,
+        0,127,0,
+        0,127,0,
+        0,127,0,
+
+        // top of middle rung
+        0,127,127,
+        0,127,127,
+        0,127,127,
+        0,127,127,
+        0,127,127,
+        0,127,127,
+        // right of middle rung
+        64,0,64,
+        64,0,64,
+        64,0,64,
+        64,0,64,
+        64,0,64,
+        64,0,64,
+
+        // bottom of middle rung.
+        127,0,64,
+        127,0,64,
+        127,0,64,
+        127,0,64,
+        127,0,64,
+        127,0,64,
+
+        // right of bottom
+        64,127,0,
+        64,127,0,
+        64,127,0,
+        64,127,0,
+        64,127,0,
+        64,127,0,
+
+        // bottom
+        0,127,0,
+        0,127,0,
+        0,127,0,
+        0,127,0,
+        0,127,0,
+        0,127,0,
+
+        // left side
+        64,127,0,
+        64,127,0,
+        64,127,0,
+        64,127,0,
+        64,127,0,
+        64,127,0,
+    ]
+      
+      this.positions = new Float32Array(...__positions);
+      this.indices = this.generateIndices(__positions)
+      this.arrays = {
+        a_position: {
+          numComponents: 3,
+          data: this.positions
+        },
+        a_color: {
+          numComponents: 3,
+          data: colors
+        },
+        // indices: { 
+        //   numComponents: 2, 
+        //   data: this.indices 
+        // },
+        a_texCoord: { 
+          numComponents: 2, 
+          data: this.generateThreeDeeTexCoords(__positions) 
+        },
+      };
+      
+      this.bufferInfo = twgl.createBufferInfoFromArrays(gl, this.arrays)
+      twgl.resizeCanvasToDisplaySize(gl.canvas)
+      // gl.viewport(0, 0, gl, 256)
+    
+      const angleInRadians = degreesToRadians(timeElapsed);
+    
+      // const translationMatrix = this.createTranslationMatrix3(width / 2, height / 2)
+      // const scaleMatrix = this.createScaleMatrix3(1., 1., 1)
+      // const rotationMatrix = this.createRotationMatrix3(90)
+      // let u_matrix = mat3.create()
+      // mat3.multiply(u_matrix, u_matrix, translationMatrix)
+      // mat3.multiply(u_matrix, u_matrix, rotationMatrix)
+      // mat3.multiply(u_matrix, u_matrix, scaleMatrix)
+      const translation = [width/2, height/3, 0]
+      const rotation = [3,3 * Math.sin(timeElapsed * 0.005) ,2]
+      // const rotation = [0,0,0]
+
+      const scale = [2,2,2]
+  
+      var matrix = m4.projection(width, height, 1800);
+          matrix = m4.translate(matrix, translation[0], translation[1], translation[2]);
+          matrix = m4.xRotate(matrix, rotation[0]);
+          matrix = m4.yRotate(matrix, rotation[1]);
+          matrix = m4.zRotate(matrix, rotation[2]);
+          matrix = m4.scale(matrix, scale[0], scale[1], scale[2]);
+    
+      const kernelToUse = kernels.emboss
+      const uniforms = {
+        u_resolution: vec2.fromValues(window.innerWidth, window.innerHeight),
+        // u_scale: [1, 1],
+        // u_translation: [width / 2, height / 2],
+        // u_rotation,
+        texture: this.videoTex,
+        texture2: this.textures.flowas,
+        u_matrix: matrix,
+        u_kernelWeight: this.computeKernelWeight(kernelToUse),
+        "u_kernel": kernelToUse,
+        u_time: timeElapsed,
+        palette: [
+          235/360,1,0.5,
+          100/360,1,0.5,
+          300/360,1,0.5,
+           40/360,1,0.5,
+          150/360,1,0.5,
+          225/360,1,0.5,
+           10/360,1,0.5,
+          200/360,1,0.5,
+        ],
+        paletteSize: 8,
+
+      }
+    
+      twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo)
+      twgl.setUniforms(this.programInfo, uniforms)
+      twgl.drawBufferInfo(gl, this.bufferInfo);
+    
+      if (gl === null) {
+        alert("Unable to initialize WebGL. Your browser or machine may not support it.");
+        return;
+      }
+    }
+    {
+      // render to the canvas
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+      // render the cube with the texture we just rendered to
+      gl.bindTexture(gl.TEXTURE_2D, this.videoTex);
+
+      // Tell WebGL how to convert from clip space to pixels
+      gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+      // gl.viewport(0, 0, targetTextureWidth, targetTextureHeight);
+
+      // Clear the canvas AND the depth buffer.
+      gl.clearColor(1, 1, 1, 1);   // clear to white
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+
+      const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+      drawSquare(aspect);
+    }
+  }
+  render(timediff, totaltime) {
+    // this.renderLSystem(timediff, totaltime)
+    // this.renderMultipassTest(timediff, totaltime)
+    this.threedeerender(timediff, totaltime)
   }
   createInputs(inputs_arr) {
     // inputs_arr = inputs_arr.map(config => {
